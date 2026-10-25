@@ -51,8 +51,8 @@ impl Frame {
         let order = if reliability.has_order() {
             let index = buf.try_get_u24_le()?;
             let channel = buf.try_get_u8()?;
-            if channel >= 32 {
-                return Err(DecodeError::Malformed("channel >= 32"));
+            if channel > 0 {
+                return Err(DecodeError::Malformed("channel > 0"));
             }
             Some((index, channel))
         } else {
