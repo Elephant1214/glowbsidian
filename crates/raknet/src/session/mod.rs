@@ -287,35 +287,3 @@ pub enum SessionState {
     /// Sent or received 0x15. Flushing the last reliable frames, then removed.
     Closing { since: Instant, was_connected: bool },
 }
-
-/// Estimate of round-trip time
-#[derive(Default)]
-pub struct Rtt {
-    /// Smoothed RTT, `None` until the first sample
-    srtt: Option<Duration>,
-    rttvar: Duration,
-}
-
-impl Rtt {
-    fn sample(&mut self, r: Duration) {
-        match self.srtt {
-            None => {
-                self.srtt = Some(r);
-                self.rttvar = r / 2;
-            }
-            Some(s) => {
-                let diff = if s > r { s - r } else { r - s };
-                self.rttvar = self.rttvar * 3 / 4 + diff / 4;
-                self.srtt = Some(s * 7 / 8 + r / 8);
-            }
-        }
-    }
-
-    fn rto(&self) -> Duration {
-        let rto = match self.srtt {
-            None => Duration::from_millis(500),
-            Some(s) => s + self.rttvar * 4,
-        };
-        rto.clamp(Duration::from_millis(50), Duration::from_secs(2))
-    }
-}

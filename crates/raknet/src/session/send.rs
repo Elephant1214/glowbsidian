@@ -1,13 +1,13 @@
 use crate::data_types::U24;
+use crate::proto::IP_UDP_HEADER_LEN;
 use crate::proto::datagram::{DATAGRAM_HEADER_LEN, put_data_header};
 use crate::proto::frame::{Frame, SplitInfo};
 use crate::proto::reliable::Reliability;
-use crate::session::{Action, Rtt};
+use crate::session::Action;
 use bytes::{Bytes, BytesMut};
 use std::collections::{HashMap, VecDeque};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-const IP_UDP_HEADER_LEN: usize = 28;
 /// flags + length + reliable + sequence + order + split
 const MAX_FRAME_HEADER_LEN: usize = 3 + 3 + 3 + 4 + 10;
 const MAX_ACK_RANGE: u32 = 4096;
@@ -224,4 +224,36 @@ impl SessionSend {
 pub(super) struct InFlight {
     frames: Vec<Frame>,
     sent_at: Instant,
+}
+
+/// Estimate of round-trip time
+#[derive(Default)]
+pub struct Rtt {
+    /// Smoothed RTT, `None` until the first sample
+    srtt: Option<Duration>,
+    rttvar: Duration,
+}
+
+impl Rtt {
+    fn sample(&mut self, r: Duration) {
+        match self.srtt {
+            None => {
+                self.srtt = Some(r);
+                self.rttvar = r / 2;
+            }
+            Some(s) => {
+                let diff = if s > r { s - r } else { r - s };
+                self.rttvar = self.rttvar * 3 / 4 + diff / 4;
+                self.srtt = Some(s * 7 / 8 + r / 8);
+            }
+        }
+    }
+
+    fn rto(&self) -> Duration {
+        let rto = match self.srtt {
+            None => Duration::from_millis(500),
+            Some(s) => s + self.rttvar * 4,
+        };
+        rto.clamp(Duration::from_millis(50), Duration::from_secs(2))
+    }
 }

@@ -200,12 +200,6 @@ impl Task {
 
                 if let Some(old) = self.sessions.insert(from, session) {
                     self.peers.remove(&old.peer());
-                    if old.was_connected() {
-                        let _ = self.event_tx.send(Event::Disconnected {
-                            peer: old.peer(),
-                            reason: DisconnectReason::ClientDisconnected,
-                        });
-                    }
                 }
                 self.peers.insert(peer, from);
                 self.send_offline(from, &reply).await;

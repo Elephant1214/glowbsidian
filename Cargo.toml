@@ -8,8 +8,10 @@ edition = "2024"
 repository = "https://github.com/Elephant1214/glowbsidian"
 
 [workspace.dependencies]
+anyhow = "1.0"
 bytes = "1.12"
-num_enum = "0.7"
+flate2 = "1.1"
+num_enum = { version = "0.7", features = ["complex-expressions"] }
 rand = "0.10"
 socket2 = "0.6"
 thiserror = "2.0"
