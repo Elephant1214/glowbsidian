@@ -48,6 +48,7 @@ pub struct Session {
 }
 
 impl Session {
+    #[expect(clippy::too_many_arguments, reason = "built once per handshake")]
     pub fn new(
         peer: PeerId,
         addr: SocketAddr,
