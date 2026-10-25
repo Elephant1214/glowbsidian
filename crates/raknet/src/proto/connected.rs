@@ -10,8 +10,7 @@ impl ConnectedCodec {
     pub fn decode(body: &Bytes, version: RakNetVersion) -> Result<ConnectedMessage, DecodeError> {
         let mut reader = &body[..];
 
-        // If the packet ID does not match a RakNet packet, pass the entire thing onto whatever is
-        // listening to packets
+        // If the packet ID does not match a RakNet packet, pass the entire thing on
         let Ok(id) = ConnectedId::try_from(body[0]) else {
             return Ok(ConnectedMessage::Game(body.clone()));
         };

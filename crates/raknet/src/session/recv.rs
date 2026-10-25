@@ -60,10 +60,10 @@ impl SessionRecv {
         cfg: SessionConfig,
         out: &mut Vec<Bytes>,
     ) -> Result<(), &'static str> {
-        if let Some(index) = frame.reliable_index {
-            if !self.reliable_seen.insert(index) {
-                return Ok(()); // This is a duplicate
-            }
+        if let Some(index) = frame.reliable_index
+            && !self.reliable_seen.insert(index)
+        {
+            return Ok(()); // This is a duplicate
         }
         let frame = match frame.split {
             Some(info) => match self.add_split(info, frame, cfg)? {

@@ -98,6 +98,10 @@ impl Session {
         )
     }
 
+    pub fn created(&self) -> Instant {
+        self.created
+    }
+
     pub fn handle_datagram(&mut self, packet: &[u8], now: Instant) -> Vec<Action> {
         let mut out = Vec::new();
         let Ok(datagram) = Datagram::decode(Bytes::copy_from_slice(packet)) else {
@@ -174,9 +178,9 @@ impl Session {
             SessionState::Pending | SessionState::Handshaking => (since(self.created)
                 > self.config.pending_timeout)
                 .then_some(DisconnectReason::TimedOut),
-            SessionState::Connected => {
-                (since(self.last_recv) > self.config.timeout).then_some(DisconnectReason::TimedOut)
-            }
+            SessionState::Connected => (since(self.last_recv) > self.config.timeout
+                || self.send.is_stuck(now, self.config.timeout))
+            .then_some(DisconnectReason::TimedOut),
             SessionState::Closing { since: t, .. } => {
                 (self.send.is_idle() || since(t) > CLOSE_LINGER).then_some(DisconnectReason::Kicked)
             }

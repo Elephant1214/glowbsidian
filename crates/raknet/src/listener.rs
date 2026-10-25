@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::event::{Command, Event};
-use crate::offline::{Counts, ExistingSession, OfflineContext, OfflineHandler, OfflineOutcome};
-use crate::peer::{DisconnectReason, PeerId};
+use crate::offline::{
+    Counts, ExistingSession, OfflineContext, OfflineHandler, OfflineOutcome, ip_bucket,
+};
+use crate::peer::PeerId;
 use crate::proto::codec::OfflineCodec;
 use crate::proto::messages::OfflineMessage;
 use crate::proto::reliable::Reliability;
@@ -44,6 +46,7 @@ impl Listener {
             v4,
             v6,
             recv_len: (cfg.max_mtu as usize).max(1500),
+            max_pending: cfg.max_pending,
             codec: OfflineCodec {
                 cookies: cfg.cookies,
             },
@@ -104,6 +107,7 @@ struct Task {
     v4: Option<UdpSocket>,
     v6: Option<UdpSocket>,
     recv_len: usize,
+    max_pending: usize,
     codec: OfflineCodec,
     /// Owns cfg-derived policy, cookie secret, pong bytes
     offline: OfflineHandler,
@@ -198,6 +202,21 @@ impl Task {
                     Instant::now(),
                 );
 
+                if ctx.counts.pending >= self.max_pending && !self.sessions.contains_key(&from) {
+                    let oldest = self
+                        .sessions
+                        .iter()
+                        .filter(|(_, s)| !s.was_connected())
+                        .min_by_key(|(_, s)| s.created())
+                        .map(|(addr, _)| *addr);
+                    if let Some(addr) = oldest
+                        && let Some(old) = self.sessions.remove(&addr)
+                    {
+                        self.peers.remove(&old.peer());
+                        tracing::debug!(evicted = %addr, for = %from, "pending pool full, evicted oldest");
+                    }
+                }
+
                 if let Some(old) = self.sessions.insert(from, session) {
                     self.peers.remove(&old.peer());
                 }
@@ -285,18 +304,19 @@ impl Task {
     }
 
     fn counts(&self, ip: IpAddr) -> Counts {
-        let mut c = Counts::default();
-        for s in self.sessions.values() {
-            if s.was_connected() {
-                c.connected += 1
+        let bucket = ip_bucket(ip);
+        let mut counts = Counts::default();
+        for session in self.sessions.values() {
+            if session.was_connected() {
+                counts.connected += 1
             } else {
-                c.pending += 1
+                counts.pending += 1
             }
-            if s.addr().ip() == ip {
-                c.from_ip += 1
+            if ip_bucket(session.addr().ip()) == bucket {
+                counts.from_ip += 1
             }
         }
-        c
+        counts
     }
 
     fn next_peer_id(&mut self) -> PeerId {

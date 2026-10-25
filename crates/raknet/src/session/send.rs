@@ -15,6 +15,10 @@ const MAX_ACK_RANGE: u32 = 4096;
 const MAX_ACK_WORK: usize = 4096;
 /// The RTO doubles per timed-out resend, up to 2^MAX_BACKOFF times.
 const MAX_BACKOFF: u32 = 4;
+/// Unacked bytes allowed on the wire. `flush` stops here and leaves the rest queued.
+const MAX_IN_FLIGHT_BYTES: usize = 512 * 1024;
+/// Queued + in-flight bytes before the peer is treated as dead.
+const MAX_BACKLOG_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Default)]
 pub(super) struct SessionSend {
@@ -29,9 +33,12 @@ pub(super) struct SessionSend {
     next_split_id: u16,
 
     /// Frames waiting to be packed into datagrams
-    queue: VecDeque<Frame>,
+    queue: VecDeque<PendingFrame>,
     /// Seq -> what was in it, for resend
     in_flight: HashMap<U24, InFlight>,
+    queued_bytes: usize,
+    in_flight_bytes: usize,
+    stalled_since: Option<Instant>,
 
     /// Smoothed RTT + variance -> resent timeout
     rtt: Rtt,
@@ -68,13 +75,16 @@ impl SessionSend {
 
         if !needs_split {
             let reliable_index = reliability.is_reliable().then(|| self.take_reliable());
-            self.queue.push_back(Frame {
-                reliability,
-                reliable_index,
-                sequence_index,
-                order,
-                split: None,
-                body,
+            self.queue.push_back(PendingFrame {
+                frame: Frame {
+                    reliability,
+                    reliable_index,
+                    sequence_index,
+                    order,
+                    split: None,
+                    body,
+                },
+                nak_resent: false,
             });
             return;
         }
@@ -86,13 +96,16 @@ impl SessionSend {
             let start = index as usize * max_body;
             let end = (start + max_body).min(body.len());
             let reliable_index = self.take_reliable(); // Every part gets its own index
-            self.queue.push_back(Frame {
-                reliability,
-                reliable_index: Some(reliable_index),
-                sequence_index,
-                order, // All parts share one order
-                split: Some(SplitInfo { count, id, index }),
-                body: body.slice(start..end),
+            self.queue.push_back(PendingFrame {
+                frame: Frame {
+                    reliability,
+                    reliable_index: Some(reliable_index),
+                    sequence_index,
+                    order, // All parts share one order
+                    split: Some(SplitInfo { count, id, index }),
+                    body: body.slice(start..end),
+                },
+                nak_resent: false,
             });
         }
     }
@@ -106,25 +119,29 @@ impl SessionSend {
     /// Packs the queue into datagrams and records the reliable frames for resend.
     pub(super) fn flush(&mut self, mtu: u16, now: Instant, out: &mut Vec<Action>) {
         let max = mtu as usize - IP_UDP_HEADER_LEN;
-        while !self.queue.is_empty() {
+        while !self.queue.is_empty() && self.in_flight_bytes < MAX_IN_FLIGHT_BYTES {
             let seq = self.next_seq;
             self.next_seq += 1;
             let mut buf = BytesMut::with_capacity(max);
             put_data_header(&mut buf, seq);
 
             let mut reliable = Vec::new();
-            while let Some(frame) = self.queue.front() {
-                if buf.len() + frame.encoded_len() > max && buf.len() > DATAGRAM_HEADER_LEN {
+            while let Some(pending) = self.queue.front() {
+                if buf.len() + pending.frame.encoded_len() > max && buf.len() > DATAGRAM_HEADER_LEN
+                {
                     break; // full, the rest goes into the next datagram
                 }
-                let frame = self.queue.pop_front().expect("front exist");
-                frame.encode(&mut buf);
-                if frame.reliability.is_reliable() {
-                    reliable.push(frame);
+                let pending = self.queue.pop_front().expect("front exist");
+                self.queued_bytes -= pending.frame.body.len();
+                pending.frame.encode(&mut buf);
+                if pending.frame.reliability.is_reliable() {
+                    reliable.push(pending);
                 }
             }
 
             if !reliable.is_empty() {
+                self.in_flight_bytes += body_len(&reliable);
+                self.stalled_since.get_or_insert(now);
                 self.in_flight.insert(
                     seq,
                     InFlight {
@@ -149,23 +166,51 @@ impl SessionSend {
             self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
         }
         for seq in due {
-            self.requeue(seq);
+            if let Some(in_flight) = self.in_flight.remove(&seq) {
+                self.requeue(in_flight.frames);
+            }
         }
     }
 
     pub(super) fn on_ack(&mut self, ranges: &[(U24, U24)], now: Instant) {
+        let mut progress = false;
+
         for seq in self.in_flight_seqs(ranges) {
             if let Some(in_flight) = self.in_flight.remove(&seq) {
+                self.in_flight_bytes -= body_len(&in_flight.frames);
                 self.rtt
                     .sample(now.saturating_duration_since(in_flight.sent_at));
                 self.backoff = 0;
+                progress = true;
             }
+        }
+
+        if progress {
+            self.stalled_since = (!self.in_flight.is_empty()).then_some(now);
         }
     }
 
     pub(super) fn on_nak(&mut self, ranges: &[(U24, U24)]) {
         for seq in self.in_flight_seqs(ranges) {
-            self.requeue(seq);
+            let Some(in_flight) = self.in_flight.get_mut(&seq) else {
+                continue;
+            };
+
+            // Only one NAK resend per frame so that they can't be used to lag DoS the socket
+            let (mut fresh, used): (Vec<_>, Vec<_>) = std::mem::take(&mut in_flight.frames)
+                .into_iter()
+                .partition(|p| !p.nak_resent);
+            if used.is_empty() {
+                self.in_flight.remove(&seq);
+            } else {
+                in_flight.frames = used;
+            }
+
+            for pending in &mut fresh {
+                pending.nak_resent = true;
+            }
+
+            self.requeue(fresh);
         }
     }
 
@@ -208,22 +253,39 @@ impl SessionSend {
 
     /// Puts a lost datagram's reliable frames back at the front. They go out in a new datagram
     /// with a new seq and a fresh sent_at timestamp so that RTT samples stay valid.
-    fn requeue(&mut self, seq: U24) {
-        if let Some(in_flight) = self.in_flight.remove(&seq) {
-            for frame in in_flight.frames.into_iter().rev() {
-                self.queue.push_front(frame);
-            }
+    fn requeue(&mut self, frames: Vec<PendingFrame>) {
+        let bytes = body_len(&frames);
+        self.in_flight_bytes -= bytes;
+        self.queued_bytes += bytes;
+        for frame in frames.into_iter().rev() {
+            self.queue.push_front(frame);
         }
     }
 
     pub(super) fn is_idle(&self) -> bool {
         self.queue.is_empty() && self.in_flight.is_empty()
     }
+
+    pub(super) fn is_stuck(&self, now: Instant, timeout: Duration) -> bool {
+        self.queued_bytes + self.in_flight_bytes > MAX_BACKLOG_BYTES
+            || self
+                .stalled_since
+                .is_some_and(|t| now.saturating_duration_since(t) > timeout)
+    }
 }
 
 pub(super) struct InFlight {
-    frames: Vec<Frame>,
+    frames: Vec<PendingFrame>,
     sent_at: Instant,
+}
+
+pub(super) struct PendingFrame {
+    frame: Frame,
+    nak_resent: bool,
+}
+
+fn body_len(frames: &[PendingFrame]) -> usize {
+    frames.iter().map(|p| p.frame.body.len()).sum()
 }
 
 /// Estimate of round-trip time
@@ -242,7 +304,7 @@ impl Rtt {
                 self.rttvar = r / 2;
             }
             Some(s) => {
-                let diff = if s > r { s - r } else { r - s };
+                let diff = s.abs_diff(r);
                 self.rttvar = self.rttvar * 3 / 4 + diff / 4;
                 self.srtt = Some(s * 7 / 8 + r / 8);
             }

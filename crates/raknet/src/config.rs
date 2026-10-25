@@ -8,31 +8,48 @@ pub const MAX_MTU: u16 = 1492;
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// IPv4 socket. `None` disables IPv4 (and with it protocol-7 clients).
+    /// IPv4 socket. `None` disables IPv4 and clients using protocols <= 7.
     pub ipv4: Option<SocketAddrV4>,
     /// IPv6 socket, bound with `IPV6_V6ONLY`. `None` disables IPv6.
     pub ipv6: Option<SocketAddrV6>,
-    /// Random per run; sent in pongs and handshake replies.
+    /// A random number generated for each run and sent in pongs and handshake replies.
     pub guid: u64,
-    /// Accepted RakNet protocols; others get `0x19` with the highest. Non-empty.
+    /// Accepted RakNet protocols. Connections from other protocols get
+    /// `INCOMPATIBLE_PROTOCOL_VERSION` with the highest supported protocol. This cannot be empty.
     pub protocols: Vec<u8>,
-    /// Ceiling for each session's negotiated MTU. [`MIN_MTU`]..=[`MAX_MTU`].
+    /// Ceiling for each session's negotiated MTU.
     /// This is allowed to be set above the maximum that the client supports to enable something
     /// like a proxy in the future.
+    ///
+    /// ### Allowed values
+    /// Min: [`MIN_MTU`]\
+    /// Max: [`u16::MAX`]
     pub max_mtu: u16,
-    /// Hard ceiling on connected sessions (after `0x09`). Excess gets `0x14`.
+    /// Hard ceiling on connected sessions (after `CONNECTION_REQUEST`).
+    /// Excess gets `NO_FREE_INCOMING_CONNECTIONS`.
+    ///
+    /// ### Allowed values
+    /// `>= 1`
     pub max_sessions: usize,
-    /// Half-open sessions (after `REPLY_2`, before `0x09`). 1..=10. Excess gets `0x14`.
+    /// Half-open sessions (after `OPEN_CONNECTION_REPLY_2`, before `CONNECTION_REQUEST`).
+    /// When full, the oldest one is evicted to make room.
+    ///
+    /// ### Allowed values
+    /// `>= 1`
     pub max_pending: usize,
-    /// Pending + connected sessions per IP. Excess gets `0x14`.
+    /// Pending + connected sessions per IP (per /64 block for IPv6).
+    /// Excess gets `NO_FREE_INCOMING_CONNECTIONS`.
+    ///
+    /// ### Allowed values
+    /// `>= 1`
     pub max_per_ip: usize,
-    /// IP address that are allowed to bypass the connection limit set by max_per_ip.
+    /// A list of IP addresses that bypass `max_per_ip`.
     pub trusted_ips: Vec<IpAddr>,
-    /// How long a half-open session may wait for `0x09`.
+    /// How long a half-open session will wait for `CONNECTION_REQUEST`. Non-zero.
     pub pending_timeout: Duration,
-    /// Silence before a connected session is dropped.
+    /// The time with no reply allowed before a connected session is dropped. Non-zero.
     pub timeout: Duration,
-    /// Anti-spoof cookie in `REPLY_1`.
+    /// Anti-spoof cookie in `OPEN_CONNECTION_REPLY_1`.
     pub cookies: bool,
 }
 
@@ -45,7 +62,7 @@ impl Default for Config {
             protocols: vec![8],
             max_mtu: 1492,
             max_sessions: 25,
-            max_pending: 10,
+            max_pending: 32,
             max_per_ip: 5,
             trusted_ips: Vec::new(),
             pending_timeout: Duration::from_secs(5),
@@ -76,12 +93,31 @@ impl Config {
             return Err(ConfigError::MtuOutOfRange(self.max_mtu));
         }
 
-        if self.max_pending == 0 {
-            return Err(ConfigError::InvalidValue {
-                field: "max_pending",
-                value: self.max_pending.to_string(),
-                expected: "at least 1",
-            });
+        for (field, value) in [
+            ("max_sessions", self.max_sessions),
+            ("max_pending", self.max_pending),
+            ("max_per_ip", self.max_per_ip),
+        ] {
+            if value == 0 {
+                return Err(ConfigError::InvalidValue {
+                    field,
+                    value: value.to_string(),
+                    expected: "at least 1",
+                });
+            }
+        }
+
+        for (field, value) in [
+            ("pending_timeout", self.pending_timeout),
+            ("timeout", self.timeout),
+        ] {
+            if value.is_zero() {
+                return Err(ConfigError::InvalidValue {
+                    field,
+                    value: format!("{value:?}"),
+                    expected: "non-zero",
+                });
+            }
         }
 
         if let Some(&p) = self

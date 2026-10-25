@@ -4,7 +4,7 @@ use crate::proto::version::RakNetVersion;
 use bytes::Bytes;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, RandomState};
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::time::{Duration, Instant};
 
 const HANDSHAKE_TTL: Duration = Duration::from_secs(10);
@@ -54,7 +54,6 @@ pub enum OfflineOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefusalReason {
     BadProtocol(u8),
-    TooManyPending,
     TooManyFromIp,
     ServerFull,
 }
@@ -64,7 +63,6 @@ pub struct OfflineHandler {
     protocols: Vec<u8>,
     max_mtu: u16,
     max_sessions: usize,
-    max_pending: usize,
     max_per_ip: usize,
     trusted_ips: Vec<IpAddr>,
     cookies: bool,
@@ -83,7 +81,6 @@ impl OfflineHandler {
             protocols: cfg.protocols.clone(),
             max_mtu: cfg.max_mtu,
             max_sessions: cfg.max_sessions,
-            max_pending: cfg.max_pending,
             max_per_ip: cfg.max_per_ip,
             trusted_ips: cfg.trusted_ips.clone(),
             cookies: cfg.cookies,
@@ -210,9 +207,7 @@ impl OfflineHandler {
 
         if !trusted && counts.from_ip >= self.max_per_ip {
             Some(RefusalReason::TooManyFromIp)
-        } else if counts.pending >= self.max_pending {
-            Some(RefusalReason::TooManyPending)
-        } else if counts.connected + counts.pending >= self.max_sessions {
+        } else if counts.connected >= self.max_sessions {
             Some(RefusalReason::ServerFull)
         } else {
             None
@@ -240,5 +235,15 @@ impl OfflineHandler {
 
     pub fn set_pong(&mut self, pong: Bytes) {
         self.pong = pong;
+    }
+}
+
+/// What addresses are counted against `max_per_ip`. An IPv6 user generally gets a whole
+/// /64 block, counting each one as a different address could allow someone to start a ridiculous
+/// number of connections.
+pub(crate) fn ip_bucket(ip: IpAddr) -> IpAddr {
+    match ip.to_canonical() {
+        IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & (u128::MAX << 64))),
+        v4 => v4,
     }
 }

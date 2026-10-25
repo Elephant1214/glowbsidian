@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let mut listener = glowbsidian_raknet::listener::Listener::bind(cfg.clone()).await?;
     listener.set_pong(format!(
         "MCPE;Test Server;92;0.17.2;0;25;{};§6Cool server§r;Survival;",
-        &cfg.guid,
+        cfg.guid,
     ));
 
     while let Some(event) = listener.next_event().await {
