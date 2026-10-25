@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+repository = "https://github.com/Elephant1214/glowbsidian"
+
+[workspace.dependencies]
+bytes = "1.12"
+num_enum = "0.7"
+rand = "0.10"
+socket2 = "0.6"
+thiserror = "2.0"
+tokio = { version = "1.54", features = ["net", "time", "sync", "macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+glowbsidian-proto = { path = "crates/proto" }
+glowbsidian-raknet = { path = "crates/raknet" }
+glowbsidian = { path = "crates/server" }
+
+[profile.dev.package."*"]
+opt-level = 2

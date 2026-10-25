@@ -1,0 +1,4 @@
+[package]
+name = "glowbsidian-proto"
+version.workspace = true
+edition.workspace = true

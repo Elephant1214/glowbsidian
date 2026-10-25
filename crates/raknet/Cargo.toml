@@ -1,0 +1,13 @@
+[package]
+name = "glowbsidian-raknet"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytes.workspace = true
+num_enum = { workspace = true, features = ["complex-expressions"] }
+rand.workspace = true
+socket2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "time", "sync"] }
+tracing.workspace = true
