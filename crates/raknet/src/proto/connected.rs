@@ -50,7 +50,7 @@ impl ConnectedCodec {
             }
             ConnectedId::Disconnect => ConnectedMessage::Disconnect,
             // Slice removes the protocol prefix from the data that gets forwarded to an actual server
-            ConnectedId::Game => return Ok(ConnectedMessage::Game(body.slice(1..))),
+            ConnectedId::Game => return Ok(ConnectedMessage::Game(body.clone())),
             other => return Err(DecodeError::UnknownId(other.into())),
         };
 
