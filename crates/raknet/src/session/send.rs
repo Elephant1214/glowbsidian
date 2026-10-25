@@ -52,6 +52,7 @@ impl SessionSend {
         let max_body =
             mtu as usize - IP_UDP_HEADER_LEN - DATAGRAM_HEADER_LEN - MAX_FRAME_HEADER_LEN;
         let needs_split = body.len() > max_body;
+        self.queued_bytes += body.len();
         let reliability = if needs_split {
             reliability.for_split()
         } else {

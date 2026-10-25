@@ -30,6 +30,10 @@ impl U24 {
     }
 }
 
+#[expect(
+    clippy::suspicious_arithmetic_impl,
+    reason = "the mask is the 24-bit wrap"
+)]
 impl Add<u32> for U24 {
     type Output = U24;
     fn add(self, rhs: u32) -> U24 {
@@ -44,6 +48,10 @@ impl AddAssign<u32> for U24 {
 }
 
 /// Distance from `rhs` forward to `self`, wrapping (same as `ahead_of`).
+#[expect(
+    clippy::suspicious_arithmetic_impl,
+    reason = "the mask is the 24-bit wrap"
+)]
 impl Sub for U24 {
     type Output = u32;
     fn sub(self, rhs: U24) -> u32 {
