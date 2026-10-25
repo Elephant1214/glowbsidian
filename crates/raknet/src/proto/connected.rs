@@ -10,7 +10,14 @@ impl ConnectedCodec {
     pub fn decode(body: &Bytes, version: RakNetVersion) -> Result<ConnectedMessage, DecodeError> {
         let mut reader = &body[..];
 
-        let msg = match reader.try_get_id::<ConnectedId>()? {
+        // If the packet ID does not match a RakNet packet, pass the entire thing onto whatever is
+        // listening to packets
+        let Ok(id) = ConnectedId::try_from(body[0]) else {
+            return Ok(ConnectedMessage::Game(body.clone()));
+        };
+
+        reader.advance(1);
+        let msg = match id {
             ConnectedId::ConnectedPing => ConnectedMessage::ConnectedPing {
                 time: reader.try_get_u64()?,
             },
@@ -49,8 +56,6 @@ impl ConnectedCodec {
                 }
             }
             ConnectedId::Disconnect => ConnectedMessage::Disconnect,
-            // Slice removes the protocol prefix from the data that gets forwarded to an actual server
-            ConnectedId::Game => return Ok(ConnectedMessage::Game(body.clone())),
             other => return Err(DecodeError::UnknownId(other.into())),
         };
 

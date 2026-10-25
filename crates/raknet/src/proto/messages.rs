@@ -117,6 +117,4 @@ pub enum ConnectedId {
     ConnectionRequestAccepted = 0x10,
     NewIncomingConnection = 0x13,
     Disconnect = 0x15,
-    #[num_enum(alternatives = [0x81..=0xFF])]
-    Game = 0x80,
 }

@@ -2,7 +2,6 @@ use crate::data_types::U24;
 use crate::proto::DecodeError;
 use crate::proto::version::RakNetVersion;
 use bytes::{Buf, BufMut, TryGetError};
-use num_enum::TryFromPrimitive;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 
 pub const MAGIC: [u8; 16] = [
@@ -10,14 +9,6 @@ pub const MAGIC: [u8; 16] = [
 ];
 
 pub trait RakBuf: Buf {
-    fn try_get_id<T>(&mut self) -> Result<T, DecodeError>
-    where
-        T: TryFromPrimitive<Primitive = u8>,
-    {
-        let id = self.try_get_u8()?;
-        T::try_from_primitive(id).map_err(|_| DecodeError::UnknownId(id))
-    }
-
     fn try_get_bool(&mut self) -> Result<bool, TryGetError> {
         Ok(self.try_get_u8()? != 0)
     }
