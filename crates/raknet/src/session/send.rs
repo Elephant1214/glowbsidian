@@ -1,15 +1,13 @@
-use crate::data_types::U24;
 use crate::proto::IP_UDP_HEADER_LEN;
 use crate::proto::datagram::{DATAGRAM_HEADER_LEN, put_data_header};
-use crate::proto::frame::{Frame, SplitInfo};
-use crate::proto::reliable::Reliability;
+use crate::proto::frame::{Frame, MAX_FRAME_HEADER_LEN, SplitInfo};
+use crate::proto::reliability::Reliability;
+use crate::proto::u24::U24;
 use crate::session::Action;
 use bytes::{Bytes, BytesMut};
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
-/// flags + length + reliable + sequence + order + split
-const MAX_FRAME_HEADER_LEN: usize = 3 + 3 + 3 + 4 + 10;
 const MAX_ACK_RANGE: u32 = 4096;
 /// Most sequences a single ACK or NAK datagram can the server look at.
 const MAX_ACK_WORK: usize = 4096;
@@ -320,3 +318,6 @@ impl Rtt {
         rto.clamp(Duration::from_millis(50), Duration::from_secs(2))
     }
 }
+
+#[cfg(test)]
+mod tests;

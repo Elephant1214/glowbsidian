@@ -1,13 +1,14 @@
-pub mod recv;
-pub mod send;
+mod recv;
+mod send;
+mod window;
 
 use crate::config::Config;
 use crate::event::Event;
 use crate::peer::{DisconnectReason, PeerId};
 use crate::proto::connected::ConnectedCodec;
+use crate::proto::connected::ConnectedMessage;
 use crate::proto::datagram::Datagram;
-use crate::proto::messages::ConnectedMessage;
-use crate::proto::reliable::Reliability;
+use crate::proto::reliability::Reliability;
 use crate::proto::version::RakNetVersion;
 use crate::proto::{INTERNAL_PLACEHOLDER_V4, INTERNAL_PLACEHOLDER_V6};
 use crate::session::recv::SessionRecv;

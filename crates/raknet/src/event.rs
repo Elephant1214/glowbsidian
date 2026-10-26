@@ -1,5 +1,5 @@
 use crate::peer::{DisconnectReason, PeerId};
-use crate::proto::reliable::Reliability;
+use crate::proto::reliability::Reliability;
 use bytes::Bytes;
 use std::net::SocketAddr;
 

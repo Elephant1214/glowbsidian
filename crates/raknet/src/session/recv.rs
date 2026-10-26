@@ -1,8 +1,9 @@
-use crate::data_types::U24;
 use crate::proto::IP_UDP_HEADER_LEN;
-use crate::proto::datagram::{encode_ranges, to_ranges};
+use crate::proto::datagram::{ACK_HEADER_LEN, MAX_RANGE_LEN, encode_ranges, to_ranges};
 use crate::proto::frame::{Frame, SplitInfo};
-use crate::proto::reliable::{Reliability, ReliableWindow};
+use crate::proto::reliability::Reliability;
+use crate::proto::u24::U24;
+use crate::session::window::ReliableWindow;
 use crate::session::{Action, SessionConfig};
 use bytes::{Bytes, BytesMut};
 use std::collections::{HashMap, HashSet};
@@ -10,8 +11,6 @@ use std::collections::{HashMap, HashSet};
 const MAX_NAK_GAP: u32 = 64;
 const MAX_ORDER_HELD: usize = 1024;
 const MAX_ORDER_HELD_BYTES: usize = 4 * 1024 * 1024;
-const ACK_HEADER_LEN: usize = 3;
-const MAX_RANGE_LEN: usize = 7;
 
 #[derive(Default)]
 pub(super) struct SessionRecv {
@@ -199,3 +198,6 @@ pub(super) struct PacketSplit {
     parts: Vec<Option<Bytes>>,
     received: u32,
 }
+
+#[cfg(test)]
+mod tests;

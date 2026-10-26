@@ -1,7 +1,7 @@
-use crate::data_types::U24;
 use crate::proto::DecodeError;
-use crate::proto::byte_ext::{RakBuf, RakBufMut};
+use crate::proto::buf::{RakBuf, RakBufMut};
 use crate::proto::frame::Frame;
+use crate::proto::u24::U24;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 /// Flags + u24 sequence
@@ -9,6 +9,8 @@ pub const DATAGRAM_HEADER_LEN: usize = 4;
 const DATA_FLAGS: u8 = 0x84;
 const ACK: u8 = 0xC0;
 const NAK: u8 = 0xA0;
+pub const ACK_HEADER_LEN: usize = 3;
+pub const MAX_RANGE_LEN: usize = 7;
 
 pub enum Datagram {
     Data { seq: U24, frames: Vec<Frame> },
@@ -93,3 +95,6 @@ pub fn to_ranges(mut seqs: Vec<U24>) -> Vec<(U24, U24)> {
     }
     out
 }
+
+#[cfg(test)]
+mod tests;

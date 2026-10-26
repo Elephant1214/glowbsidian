@@ -1,7 +1,83 @@
-use crate::proto::byte_ext::{RakBuf, RakBufMut};
-use crate::proto::messages::{OfflineId, OfflineMessage};
+use crate::proto::buf::{RakBuf, RakBufMut};
 use crate::proto::{DecodeError, IP_UDP_HEADER_LEN};
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use std::net::SocketAddr;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OfflineMessage {
+    UnconnectedPing {
+        time: u64,
+        client_guid: u64,
+        open_only: bool,
+    },
+    UnconnectedPong {
+        time: u64,
+        server_guid: u64,
+        data: Bytes,
+    },
+    OpenConnectionRequest1 {
+        protocol: u8,
+        mtu: u16,
+    },
+    OpenConnectionReply1 {
+        server_guid: u64,
+        cookie: Option<u32>,
+        mtu: u16,
+    },
+    OpenConnectionRequest2 {
+        cookie: Option<u32>,
+        server_addr: SocketAddr,
+        mtu: u16,
+        client_guid: u64,
+    },
+    OpenConnectionReply2 {
+        server_guid: u64,
+        client_addr: SocketAddr,
+        mtu: u16,
+    },
+    IncompatibleProtocol {
+        protocol: u8,
+        server_guid: u64,
+    },
+    NoFreeIncomingConnections {
+        server_guid: u64,
+    },
+}
+
+impl OfflineMessage {
+    pub fn id(&self) -> OfflineId {
+        match self {
+            Self::UnconnectedPing {
+                open_only: false, ..
+            } => OfflineId::UnconnectedPing,
+            Self::UnconnectedPing {
+                open_only: true, ..
+            } => OfflineId::UnconnectedPingOpenConnections,
+            Self::OpenConnectionRequest1 { .. } => OfflineId::OpenConnectionRequest1,
+            Self::OpenConnectionReply1 { .. } => OfflineId::OpenConnectionReply1,
+            Self::OpenConnectionRequest2 { .. } => OfflineId::OpenConnectionRequest2,
+            Self::OpenConnectionReply2 { .. } => OfflineId::OpenConnectionReply2,
+            Self::NoFreeIncomingConnections { .. } => OfflineId::NoFreeIncomingConnections,
+            Self::IncompatibleProtocol { .. } => OfflineId::IncompatibleProtocol,
+            Self::UnconnectedPong { .. } => OfflineId::UnconnectedPong,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
+pub enum OfflineId {
+    UnconnectedPing = 0x01,
+    UnconnectedPingOpenConnections = 0x02,
+    OpenConnectionRequest1 = 0x05,
+    OpenConnectionReply1 = 0x06,
+    OpenConnectionRequest2 = 0x07,
+    OpenConnectionReply2 = 0x08,
+    NoFreeIncomingConnections = 0x14,
+    IncompatibleProtocol = 0x19,
+    UnconnectedPong = 0x1C,
+}
 
 pub struct OfflineCodec {
     pub cookies: bool,

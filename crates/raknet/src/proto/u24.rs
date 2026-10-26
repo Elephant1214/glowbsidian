@@ -58,3 +58,6 @@ impl Sub for U24 {
         self.0.wrapping_sub(rhs.0) & U24::MASK
     }
 }
+
+#[cfg(test)]
+mod tests;

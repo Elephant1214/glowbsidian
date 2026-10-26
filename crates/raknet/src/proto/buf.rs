@@ -1,5 +1,5 @@
-use crate::data_types::U24;
 use crate::proto::DecodeError;
+use crate::proto::u24::U24;
 use crate::proto::version::RakNetVersion;
 use bytes::{Buf, BufMut, TryGetError};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};

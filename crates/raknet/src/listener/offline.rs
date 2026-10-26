@@ -1,5 +1,5 @@
 use crate::config::{Config, MIN_MTU};
-use crate::proto::messages::OfflineMessage;
+use crate::proto::offline::OfflineMessage;
 use crate::proto::version::RakNetVersion;
 use bytes::Bytes;
 use std::collections::HashMap;
@@ -90,7 +90,7 @@ impl OfflineHandler {
         }
     }
 
-    pub(crate) fn handle(
+    pub fn handle(
         &mut self,
         from: SocketAddr,
         msg: OfflineMessage,
@@ -241,9 +241,12 @@ impl OfflineHandler {
 /// What addresses are counted against `max_per_ip`. An IPv6 user generally gets a whole
 /// /64 block, counting each one as a different address could allow someone to start a ridiculous
 /// number of connections.
-pub(crate) fn ip_bucket(ip: IpAddr) -> IpAddr {
+pub fn ip_bucket(ip: IpAddr) -> IpAddr {
     match ip.to_canonical() {
         IpAddr::V6(v6) => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & (u128::MAX << 64))),
         v4 => v4,
     }
 }
+
+#[cfg(test)]
+mod tests;

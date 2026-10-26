@@ -1,4 +1,4 @@
-use glowbsidian_raknet::event::Event;
+use glowbsidian_raknet::Event;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -6,12 +6,12 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::TRACE)
         .init();
 
-    let cfg = glowbsidian_raknet::config::Config {
+    let cfg = glowbsidian_raknet::Config {
         protocols: vec![8],
         ..Default::default()
     };
 
-    let mut listener = glowbsidian_raknet::listener::Listener::bind(cfg.clone()).await?;
+    let mut listener = glowbsidian_raknet::Listener::bind(cfg.clone()).await?;
     listener.set_pong(format!(
         "MCPE;Test Server;92;0.17.2;0;25;{};§6Cool server§r;Survival;",
         cfg.guid,

@@ -1,8 +1,11 @@
-use crate::data_types::U24;
 use crate::proto::DecodeError;
-use crate::proto::byte_ext::{RakBuf, RakBufMut};
-use crate::proto::reliable::Reliability;
+use crate::proto::buf::{RakBuf, RakBufMut};
+use crate::proto::reliability::Reliability;
+use crate::proto::u24::U24;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+/// flags + length + reliable + sequence + order + split
+pub const MAX_FRAME_HEADER_LEN: usize = 3 + 3 + 3 + 4 + 10;
 
 #[derive(Debug, Clone)]
 pub struct Frame {
@@ -117,3 +120,6 @@ impl Frame {
             + self.body.len()
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,8 +1,51 @@
 use crate::proto::DecodeError;
-use crate::proto::byte_ext::{RakBuf, RakBufMut};
-use crate::proto::messages::{ConnectedId, ConnectedMessage};
+use crate::proto::buf::{RakBuf, RakBufMut};
 use crate::proto::version::RakNetVersion;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use std::net::SocketAddr;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConnectedMessage {
+    ConnectedPing {
+        time: u64,
+    },
+    ConnectedPong {
+        ping_time: u64,
+        pong_time: u64,
+    },
+    ConnectionRequest {
+        client_guid: u64,
+        time: u64,
+    },
+    ConnectionRequestAccepted {
+        client_addr: SocketAddr,
+        internal: Vec<SocketAddr>,
+        request_time: u64,
+        time: u64,
+    },
+    NewIncomingConnection {
+        server_addr: SocketAddr,
+        internal: Vec<SocketAddr>,
+        ping_time: u64,
+        pong_time: u64,
+    },
+    DetectLostConnections,
+    Disconnect,
+    Game(Bytes),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
+pub enum ConnectedId {
+    ConnectedPing = 0x00,
+    ConnectedPong = 0x03,
+    DetectLostConnections = 0x04,
+    ConnectionRequest = 0x09,
+    ConnectionRequestAccepted = 0x10,
+    NewIncomingConnection = 0x13,
+    Disconnect = 0x15,
+}
 
 pub struct ConnectedCodec;
 

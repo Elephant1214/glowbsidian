@@ -1,18 +1,20 @@
+mod offline;
+mod socket;
+
 use crate::config::Config;
 use crate::event::{Command, Event};
-use crate::offline::{
+use crate::listener::offline::{
     Counts, ExistingSession, OfflineContext, OfflineHandler, OfflineOutcome, ip_bucket,
 };
+use crate::listener::socket::{bind_v4, bind_v6, recv};
 use crate::peer::PeerId;
-use crate::proto::codec::OfflineCodec;
-use crate::proto::messages::OfflineMessage;
-use crate::proto::reliable::Reliability;
+use crate::proto::offline::{OfflineCodec, OfflineMessage};
+use crate::proto::reliability::Reliability;
 use crate::session::{Action, Session, SessionConfig};
 use bytes::{Bytes, BytesMut};
-use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::HashMap;
 use std::io;
-use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
@@ -323,23 +325,4 @@ impl Task {
         self.next_peer = self.next_peer.wrapping_add(1);
         PeerId::new(self.next_peer)
     }
-}
-
-async fn recv(sock: &Option<UdpSocket>, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-    match sock {
-        Some(s) => s.recv_from(buf).await,
-        None => std::future::pending().await,
-    }
-}
-
-async fn bind_v4(addr: SocketAddrV4) -> io::Result<UdpSocket> {
-    UdpSocket::bind(addr).await
-}
-
-fn bind_v6(addr: SocketAddrV6) -> io::Result<UdpSocket> {
-    let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
-    socket.set_only_v6(true)?;
-    socket.set_nonblocking(true)?;
-    socket.bind(&addr.into())?;
-    UdpSocket::from_std(socket.into())
 }
