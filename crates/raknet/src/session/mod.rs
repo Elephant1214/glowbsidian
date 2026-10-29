@@ -4,6 +4,7 @@ mod window;
 
 use crate::config::Config;
 use crate::event::Event;
+use crate::listener::offline::Negotiated;
 use crate::peer::{DisconnectReason, PeerId};
 use crate::proto::connected::ConnectedCodec;
 use crate::proto::connected::ConnectedMessage;
@@ -49,24 +50,20 @@ pub struct Session {
 }
 
 impl Session {
-    #[expect(clippy::too_many_arguments, reason = "built once per handshake")]
     pub fn new(
         peer: PeerId,
         addr: SocketAddr,
-        guid: u64,
-        mtu: u16,
-        protocol: u8,
-        version: RakNetVersion,
+        negotiated: Negotiated,
         config: SessionConfig,
         now: Instant,
     ) -> Self {
         Self {
             peer,
             addr,
-            guid,
-            mtu,
-            protocol,
-            version,
+            guid: negotiated.guid,
+            mtu: negotiated.mtu,
+            protocol: negotiated.protocol,
+            version: negotiated.version,
             config,
             state: SessionState::Pending,
             created: now,

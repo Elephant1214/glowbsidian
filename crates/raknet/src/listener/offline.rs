@@ -31,15 +31,13 @@ pub struct Counts {
     pub from_ip: usize,
 }
 
+#[derive(Debug)]
 pub enum OfflineOutcome {
     /// Send this and change nothing
     Reply(OfflineMessage),
     /// Create or replace the session for this address, then send `reply`.
     CreateSession {
-        guid: u64,
-        mtu: u16,
-        protocol: u8,
-        version: RakNetVersion,
+        negotiated: Negotiated,
         reply: OfflineMessage,
     },
     /// Refuse: log `reason`, send `reply` (0x14 or 0x19)
@@ -49,6 +47,14 @@ pub enum OfflineOutcome {
     },
     /// Drops the packet
     Ignore,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Negotiated {
+    pub guid: u64,
+    pub mtu: u16,
+    pub protocol: u8,
+    pub version: RakNetVersion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,13 +193,13 @@ impl OfflineHandler {
                 let version = RakNetVersion::for_protocol(protocol)
                     .expect("protocols are validated in Config::validate");
                 tracing::trace!(with = %from, "connection stage 2");
-                OfflineOutcome::CreateSession {
+                let negotiated = Negotiated {
                     guid: client_guid,
                     mtu,
                     protocol,
                     version,
-                    reply,
-                }
+                };
+                OfflineOutcome::CreateSession { negotiated, reply }
             }
 
             // Server-bound only

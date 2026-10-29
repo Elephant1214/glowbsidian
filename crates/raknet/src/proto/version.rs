@@ -1,5 +1,5 @@
 /// Wire details that differ between RakNet protocol versions.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RakNetVersion {
     pub internal_ids: usize,
     pub ipv6: bool,

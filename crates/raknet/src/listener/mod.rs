@@ -1,4 +1,4 @@
-mod offline;
+pub(crate) mod offline;
 mod socket;
 
 use crate::config::Config;
@@ -184,25 +184,11 @@ impl Task {
             OfflineOutcome::Reply(reply) => {
                 self.send_offline(from, &reply).await;
             }
-            OfflineOutcome::CreateSession {
-                guid,
-                mtu,
-                protocol,
-                version,
-                reply,
-            } => {
+            OfflineOutcome::CreateSession { negotiated, reply } => {
                 tracing::trace!(for = %from, "creating a new session");
                 let peer = self.next_peer_id();
-                let session = Session::new(
-                    peer,
-                    from,
-                    guid,
-                    mtu,
-                    protocol,
-                    version,
-                    self.session_config,
-                    Instant::now(),
-                );
+                let session =
+                    Session::new(peer, from, negotiated, self.session_config, Instant::now());
 
                 if ctx.counts.pending >= self.max_pending && !self.sessions.contains_key(&from) {
                     let oldest = self

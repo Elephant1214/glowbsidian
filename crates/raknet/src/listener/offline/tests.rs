@@ -63,7 +63,10 @@ fn full_handshake_creates_a_session() {
     assert!(matches!(
         out,
         OfflineOutcome::CreateSession {
-            guid: CLIENT_GUID,
+            negotiated: Negotiated {
+                guid: CLIENT_GUID,
+                ..
+            },
             ..
         }
     ));
